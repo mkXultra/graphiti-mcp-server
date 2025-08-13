@@ -35,6 +35,11 @@ from graphiti_core.search.search_config_recipes import (
 from graphiti_core.search.search_filters import SearchFilters
 from graphiti_core.utils.maintenance.graph_data_operations import clear_data
 
+from src.tools.entity_relations import get_entity_relations as get_entity_relations_impl
+from src.tools.traverse_knowledge_graph import traverse_knowledge_graph as traverse_knowledge_graph_impl
+from src.tools.graph_functions import find_paths_between_entities as find_paths_between_entities_impl
+from src.tools.graph_functions import build_subgraph as build_subgraph_impl
+
 load_dotenv()
 
 
@@ -834,13 +839,26 @@ async def search_memory_nodes(
     center_node_uuid: str | None = None,
     entity: str = '',  # cursor seems to break with None
 ) -> NodeSearchResponse | ErrorResponse:
-    """Search the graph memory for relevant node summaries.
-    These contain a summary of all of a node's relationships with other nodes.
-
-    Note: entity is a single entity type to filter results (permitted: "Preference", "Procedure").
+    """Search for entities in the knowledge graph using semantic search.
+    
+    USE THIS TOOL WHEN:
+    - You need to find entities but don't know their UUIDs
+    - User asks about a topic/concept/person without specific identifiers
+    - You need to discover what entities exist related to a query
+    
+    THEN USE THESE TOOLS WITH THE FOUND UUIDs:
+    - find_paths_between_entities: To find paths between discovered entities
+    - build_subgraph: To explore the neighborhood of discovered entities
+    - get_entity_edge: To get specific edge details
+    
+    COMPARISON:
+    - search_memory_nodes: Finds ENTITIES (nodes) by text search
+    - search_memory_facts: Finds RELATIONSHIPS (edges) by text search
+    - find_paths_between_entities: Needs exact UUIDs, finds paths
+    - build_subgraph: Needs exact UUIDs, explores neighborhood
 
     Args:
-        query: The search query
+        query: Natural language search query (e.g., "project management", "Alice", "React framework")
         group_ids: Optional list of group IDs to filter results
         max_nodes: Maximum number of nodes to return (default: 10)
         center_node_uuid: Optional UUID of a node to center the search around
@@ -1050,6 +1068,132 @@ async def get_entity_edge(uuid: str) -> dict[str, Any] | ErrorResponse:
         error_msg = str(e)
         logger.error(f'Error getting entity edge: {error_msg}')
         return ErrorResponse(error=f'Error getting entity edge: {error_msg}')
+
+
+@mcp.tool()
+async def get_entity_relations(
+    entity_uuid: str,
+) -> list[dict[str, Any]] | ErrorResponse:
+    """Get all relationships (edges) connected to a specific entity.
+
+    Args:
+        entity_uuid: UUID of the entity node to get relationships for
+    """
+    global graphiti_client
+    return await get_entity_relations_impl(graphiti_client, entity_uuid)
+
+
+@mcp.tool()
+async def traverse_knowledge_graph(
+    start_node_uuid: str,
+    depth: int = 1,
+) -> dict[str, Any] | ErrorResponse:
+    """Traverse the knowledge graph starting from a specific node.
+    
+    NOTE: This is an older tool that only supports single node traversal.
+    Consider using build_subgraph for more features.
+    
+    USE build_subgraph INSTEAD WHEN:
+    - You need multiple starting points
+    - You want paths between entities
+    - You need better performance (optimized queries)
+    
+    USE THIS WHEN:
+    - You only need single-node traversal
+    - You want a simpler nested structure
+    
+    Args:
+        start_node_uuid: UUID of the node to start traversal from
+        depth: Depth of traversal (0 = node only, 1 = direct relations, 2+ = deeper traversal, max 5)
+    """
+    global graphiti_client
+    return await traverse_knowledge_graph_impl(graphiti_client, start_node_uuid, depth)
+
+
+@mcp.tool()
+async def find_paths_between_entities(
+    from_uuid: str,
+    to_uuid: str,
+    max_depth: int = 5,
+    max_paths: int = 10,
+) -> dict[str, Any] | ErrorResponse:
+    """Find all paths between two specific entities to understand their relationship.
+    
+    USE THIS TOOL WHEN:
+    - You have two specific entity UUIDs and need to know how they're connected
+    - User asks: "How is X related to Y?", "What connects A to B?", "Find the relationship between..."
+    - You need to trace paths through intermediary entities
+    
+    DO NOT USE THIS WHEN:
+    - You don't have specific UUIDs (use search_memory_nodes first to find them)
+    - You need the neighborhood of one entity (use build_subgraph instead)
+    - You're doing broad exploration (use search_memory_facts or search_memory_nodes)
+    
+    TOOL SELECTION GUIDE:
+    - find_paths_between_entities: When you need PATHS between TWO specific entities
+    - build_subgraph: When you need NEIGHBORHOOD around one or more entities
+    - search_memory_nodes: When you need to FIND entities by text search
+    - search_memory_facts: When you need to FIND relationships by text search
+    
+    Args:
+        from_uuid: UUID of the starting entity (get from search_memory_nodes if unknown)
+        to_uuid: UUID of the target entity (get from search_memory_nodes if unknown)
+        max_depth: Maximum path length (default: 5, keep low for faster results)
+        max_paths: Maximum number of paths (default: 10)
+    
+    Returns:
+        Dictionary with paths between entities, including all nodes and edges in those paths.
+        Only Entity nodes and RELATES_TO edges are included (no Episodic nodes or MENTIONS edges).
+    """
+    global graphiti_client
+    return await find_paths_between_entities_impl(
+        graphiti_client, from_uuid, to_uuid, max_depth, max_paths
+    )
+
+
+@mcp.tool()
+async def build_subgraph(
+    entity_uuids: list[str],
+    include_paths: bool = True,
+    max_hop: int = 1,
+) -> dict[str, Any] | ErrorResponse:
+    """Extract a local subgraph around one or more entities to explore their neighborhood.
+    
+    USE THIS TOOL WHEN:
+    - You need to explore what's connected to specific entities
+    - User asks: "What's around X?", "Show me the context of Y", "What does Z connect to?"
+    - You want to understand the local structure around entities
+    - You need a complete graph view (nodes + edges + structure)
+    
+    DO NOT USE THIS WHEN:
+    - You need paths between exactly two entities (use find_paths_between_entities)
+    - You're searching for entities by text (use search_memory_nodes)
+    - You only need facts/relationships (use search_memory_facts)
+    
+    COMPARISON WITH OTHER TOOLS:
+    - build_subgraph: Returns COMPLETE GRAPH STRUCTURE around entities
+    - find_paths_between_entities: Returns only PATHS between two specific entities
+    - search_memory_nodes: Returns entities matching a TEXT SEARCH
+    - traverse_knowledge_graph: Similar but includes Episodic nodes (use build_subgraph for cleaner results)
+    
+    OPTIMIZATION TIPS:
+    - Start with max_hop=1 (direct neighbors only)
+    - Use max_hop=2 for extended context, rarely need >2
+    - Set include_paths=False if you don't need paths between entities (faster)
+    
+    Args:
+        entity_uuids: List of entity UUIDs to explore around (get from search_memory_nodes if unknown)
+        include_paths: Find paths between the given entities (default: True, set False for speed)
+        max_hop: How far to expand from starting entities (default: 1, usually sufficient)
+    
+    Returns:
+        Complete subgraph with nodes dictionary, edges list, and adjacency list.
+        Only Entity nodes and RELATES_TO edges included for clean knowledge representation.
+    """
+    global graphiti_client
+    return await build_subgraph_impl(
+        graphiti_client, entity_uuids, include_paths, max_hop
+    )
 
 
 @mcp.tool()

@@ -1,0 +1,32 @@
+version: '3.8'
+
+services:
+  neo4j-test:
+    image: neo4j:5.26.0
+    container_name: neo4j-graphiti-test
+    ports:
+      - "7688:7687"  # 別のBoltポート
+      - "7475:7474"  # 別のHTTPポート
+    environment:
+      - NEO4J_AUTH=neo4j/testpassword
+      - NEO4J_PLUGINS=["apoc"]
+      - NEO4J_apoc_export_file_enabled=true
+      - NEO4J_apoc_import_file_enabled=true
+      - NEO4J_apoc_import_file_use__neo4j__config=true
+    volumes:
+      - ./test-data/neo4j/data:/data
+      - ./test-data/neo4j/logs:/logs
+      - ./test-data/neo4j/import:/var/lib/neo4j/import
+      - ./test-data/neo4j/plugins:/plugins
+    healthcheck:
+      test: wget http://localhost:7474 || exit 1
+      interval: 1s
+      timeout: 10s
+      retries: 20
+      start_period: 3s
+    networks:
+      - graphiti-test
+
+networks:
+  graphiti-test:
+    driver: bridge

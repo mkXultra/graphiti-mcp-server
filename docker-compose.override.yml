@@ -1,0 +1,23 @@
+# 開発環境用のオーバーライド設定
+# docker-compose.ymlと自動的にマージされます
+
+services:
+  graphiti-mcp:
+    # 開発時はrootユーザーで実行（ボリュームマウントの権限問題を回避）
+    user: root
+    # 開発時はstdinを有効にしてインタラクティブに
+    stdin_open: true
+    tty: true
+    
+    # ホットリロード用の環境変数
+    environment:
+      - PYTHONDONTWRITEBYTECODE=1
+      - DEVELOPMENT=true
+    
+    # ホットリロードを有効にする（どちらか選択）
+    
+    # 方法1: watchdogを使用したホットリロード
+    command: ["uv", "run", "dev_server.py"]
+    
+    # 方法2: uvのwatchオプション（もし対応していれば）
+    # command: ["uv", "run", "--watch", "graphiti_mcp_server.py", "--transport", "sse"]

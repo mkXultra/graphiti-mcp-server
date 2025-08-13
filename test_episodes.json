@@ -1,0 +1,39 @@
+{
+  "test_episodes": [
+    {
+      "name": "プロジェクトチーム構成",
+      "episode_body": "Alice Smithは東京オフィスのプロジェクトマネージャーです。彼女はProject Alphaを管理しており、Bob JohnsonとCarol Whiteと協力しています。Bob Johnsonはシニアエンジニアで、Carol Whiteはデザイナーです。",
+      "source": "text",
+      "source_description": "チーム情報",
+      "group_id": "test_entity_edge_group"
+    },
+    {
+      "name": "技術スタック情報",
+      "episode_body": "Project AlphaではReactとTypeScriptを使用しています。Bob JohnsonはReactの専門家で、バックエンドにはNode.jsを使用しています。データベースはPostgreSQLを採用しています。",
+      "source": "text",
+      "source_description": "技術仕様",
+      "group_id": "test_entity_edge_group"
+    },
+    {
+      "name": "別プロジェクト情報",
+      "episode_body": "David LeeはProject Betaのリーダーです。彼はEmily Davisと一緒に機械学習システムを開発しています。Project BetaはPythonとTensorFlowを使用しています。",
+      "source": "text",
+      "source_description": "別プロジェクト",
+      "group_id": "test_entity_edge_group"
+    },
+    {
+      "name": "Bob Johnsonの趣味",
+      "episode_body": "Bob Johnsonは週末にマラソンランニングを楽しんでいます。彼は東京マラソンに3回参加した経験があり、フルマラソンの自己ベストは3時間15分です。また、ランニングクラブ「Tokyo Runners」のメンバーでもあります。",
+      "source": "text",
+      "source_description": "個人情報",
+      "group_id": "test_entity_edge_group"
+    },
+    {
+      "name": "Bob Johnsonの教育活動",
+      "episode_body": "Bob Johnsonは東京工業大学で非常勤講師として「モダンWeb開発」の講義を担当しています。彼は毎週火曜日の夜に大学院生向けにReactとTypeScriptの実践的な開発手法を教えています。学生からの評価も高く、授業評価は4.8/5.0です。",
+      "source": "text",
+      "source_description": "教育経歴",
+      "group_id": "test_entity_edge_group"
+    }
+  ]
+}
