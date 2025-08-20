@@ -151,4 +151,6 @@ uv.lock
 .DS_Store
 
 # Docker
-*.log
+*.log# Neo4j data directories
+neo4j_data/
+neo4j_logs/

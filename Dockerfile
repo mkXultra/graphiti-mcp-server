@@ -35,6 +35,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 
 # Copy application code
 COPY graphiti_mcp_server.py ./
+COPY src ./src
 
 # Change ownership to app user
 RUN chown -Rv app:app /app

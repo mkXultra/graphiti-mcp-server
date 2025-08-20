@@ -70,17 +70,34 @@ This extension follows Graphiti-core's design principles:
 
 ## 🚀 Quick Start
 
-### Prerequisites
+### Option 1: Using Docker (Recommended)
 
+```bash
+# Pull the pre-built image
+docker pull ghcr.io/mkxultra/graphiti-mcp-server-extended:latest
+
+# Run with docker-compose
+docker compose up
+
+# Or run standalone
+docker run -p 8000:8000 \
+  -e NEO4J_URI=bolt://your-neo4j:7687 \
+  -e NEO4J_USER=neo4j \
+  -e NEO4J_PASSWORD=your-password \
+  -e OPENAI_API_KEY=your-api-key \
+  ghcr.io/mkxultra/graphiti-mcp-server-extended:latest
+```
+
+### Option 2: Local Installation
+
+Prerequisites:
 1. Python 3.10 or higher
 2. Neo4j database (version 5.26+)
 3. OpenAI API key for LLM operations
 
-### Installation
-
 ```bash
 # Clone this repository
-git clone https://github.com/yourusername/graphiti-mcp-server.git
+git clone https://github.com/mkXultra/graphiti-mcp-server.git
 cd graphiti-mcp-server
 
 # Install dependencies with uv
