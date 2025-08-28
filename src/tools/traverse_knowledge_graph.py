@@ -84,95 +84,50 @@ async def get_node_by_uuid(
 
 async def traverse_knowledge_graph_impl(
     graphiti_client: Graphiti,
-    start_node_uuid: str,
+    start_node_uuid: str | None = None,
     depth: int = 1,
-    visited_nodes: set[str] | None = None,
+    cursor_token: str | None = None,
 ) -> dict[str, Any]:
-    """Internal implementation of traverse_knowledge_graph with cycle detection.
+    """Internal implementation of traverse_knowledge_graph with cursor-based pagination.
+    
+    This implementation now uses the paginated version for all traversals.
     
     Args:
         graphiti_client: The Graphiti client instance
-        start_node_uuid: UUID of the node to start traversal from
+        start_node_uuid: UUID of the node to start traversal from (required for initial call)
         depth: Depth of traversal (0 = node only, 1 = direct relations, etc.)
-        visited_nodes: Set of already visited node UUIDs to prevent cycles
+        cursor_token: Optional cursor token for resuming a paginated traversal
         
     Returns:
-        A dictionary containing the node and its edges with nested structure
+        A dictionary containing the node and its edges with nested structure.
+        May include a 'cursor' field if pagination is needed.
     """
-    # Initialize visited_nodes if this is the top-level call
-    if visited_nodes is None:
-        visited_nodes = set()
+    from src.tools.traverse_wrapper import traverse_knowledge_graph_paginated
+    from src.tools.traverse_wrapper import CursorExpired, InvalidCursor, SessionNotFound, QueryMismatch
     
-    # Check for cycles
-    if start_node_uuid in visited_nodes:
-        # Return minimal info for already visited nodes to prevent infinite recursion
-        node = await get_node_by_uuid(graphiti_client, start_node_uuid)
-        if node is None:
-            return {
-                'node': {'uuid': start_node_uuid, 'error': 'Node not found'},
-                'edges': [],
-                'cyclic_reference': True,
-            }
-        return {
-            'node': format_node_result(node),
-            'edges': [],
-            'cyclic_reference': True,
-        }
-    
-    # Mark this node as visited
-    visited_nodes.add(start_node_uuid)
-    
-    # Get the node information
-    node = await get_node_by_uuid(graphiti_client, start_node_uuid)
-    if node is None:
-        return {
-            'node': {'uuid': start_node_uuid, 'error': 'Node not found'},
-            'edges': [],
-        }
-    
-    result = {
-        'node': format_node_result(node),
-        'edges': [],
-    }
-    
-    # Base case: if depth is 0, return only the node
-    if depth == 0:
-        return result
-    
-    # Get all edges connected to this node
     try:
-        # Get edges where this node is the source
-        entity_edges = await EntityEdge.get_by_node_uuid(graphiti_client.driver, start_node_uuid)
-        
-        if not entity_edges:
-            return result
-        
-        # Process each edge
-        for edge in entity_edges:
-            # Determine the target node UUID
-            # If this node is the source, target is the target_node_uuid
-            # If this node is the target, target is the source_node_uuid
-            if edge.source_node_uuid == start_node_uuid:
-                target_uuid = edge.target_node_uuid
-            else:
-                target_uuid = edge.source_node_uuid
-            
-            # Recursively traverse the target node with reduced depth
-            target_data = await traverse_knowledge_graph_impl(
-                graphiti_client,
-                target_uuid,
-                depth - 1,
-                visited_nodes.copy(),  # Pass a copy to allow revisiting in different paths
-            )
-            
-            # Format the edge with target data
-            edge_info = format_edge_for_traverse(edge, target_data)
-            result['edges'].append(edge_info)
-        
+        return await traverse_knowledge_graph_paginated(
+            graphiti_client,
+            start_node_uuid=start_node_uuid,
+            depth=depth,
+            cursor_token=cursor_token,
+            format_node_result=format_node_result,
+            format_edge_for_traverse=format_edge_for_traverse,
+            get_node_by_uuid=get_node_by_uuid,
+        )
+    except CursorExpired as e:
+        return {'error': f'CURSOR_EXPIRED: {str(e)}'}
+    except InvalidCursor as e:
+        return {'error': f'INVALID_CURSOR: {str(e)}'}
+    except SessionNotFound as e:
+        return {'error': f'SESSION_NOT_FOUND: {str(e)}'}
+    except QueryMismatch as e:
+        return {'error': f'QUERY_MISMATCH: {str(e)}'}
+    except ValueError as e:
+        return {'error': f'INVALID_ARGUMENT: {str(e)}'}
     except Exception as e:
-        logger.error(f'Error getting edges for node {start_node_uuid}: {str(e)}')
-    
-    return result
+        logger.error(f'Error traversing knowledge graph: {str(e)}')
+        return {'error': f'Error traversing knowledge graph: {str(e)}'}
 
 
 async def traverse_knowledge_graph(

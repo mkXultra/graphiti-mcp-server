@@ -185,11 +185,13 @@ class TestTraverseKnowledgeGraph:
         result = await traverse_knowledge_graph(graphiti_client, start_uuid, depth=0)
         
         assert not isinstance(result, dict) or 'error' not in result
-        assert 'node' in result
+        assert 'start' in result  # Flat structure uses 'start'
+        assert 'nodes' in result   # Flat structure uses 'nodes' dict
         assert 'edges' in result
         assert result['edges'] == []  # No edges at depth 0
-        assert result['node']['uuid'] == start_uuid
-        assert result['node']['name'] == "Bob Johnson"
+        assert result['start'] == start_uuid
+        assert start_uuid in result['nodes']
+        assert result['nodes'][start_uuid]['name'] == "Bob Johnson"
     
     @pytest.mark.asyncio
     async def test_traverse_depth_1(self, graphiti_client):
@@ -199,19 +201,22 @@ class TestTraverseKnowledgeGraph:
         result = await traverse_knowledge_graph(graphiti_client, start_uuid, depth=1)
         
         assert not isinstance(result, dict) or 'error' not in result
-        assert 'node' in result
+        assert 'start' in result  # Flat structure
+        assert 'nodes' in result   # Flat structure
         assert 'edges' in result
         assert len(result['edges']) > 0  # Should have edges
         
-        # Check that edges have target data
+        # Check that edges have proper flat structure
         for edge in result['edges']:
             assert 'type' in edge
             assert 'fact' in edge
             assert 'target' in edge
-            assert 'node' in edge['target']
-            assert 'edges' in edge['target']
-            # At depth 1, targets should have no edges
-            assert edge['target']['edges'] == []
+            assert 'source' in edge
+            assert 'depth' in edge
+            # In flat structure, target is a UUID string
+            assert isinstance(edge['target'], str)
+            # Target node should exist in nodes dict
+            assert edge['target'] in result['nodes']
     
     @pytest.mark.asyncio
     async def test_traverse_depth_2(self, graphiti_client):
@@ -221,18 +226,22 @@ class TestTraverseKnowledgeGraph:
         result = await traverse_knowledge_graph(graphiti_client, start_uuid, depth=2)
         
         assert not isinstance(result, dict) or 'error' not in result
-        assert 'node' in result
+        assert 'start' in result  # Flat structure
+        assert 'nodes' in result   # Flat structure
         assert 'edges' in result
         assert len(result['edges']) > 0
         
-        # Check that some targets have their own edges (depth 2)
-        has_nested_edges = False
+        # In flat structure, check for edges at different depths
+        has_depth_1 = False
+        has_depth_2 = False
         for edge in result['edges']:
-            if len(edge['target']['edges']) > 0:
-                has_nested_edges = True
-                break
+            if edge.get('depth') == 1:
+                has_depth_1 = True
+            elif edge.get('depth') == 2:
+                has_depth_2 = True
         
-        assert has_nested_edges, "At depth 2, some targets should have their own edges"
+        assert has_depth_1, "Should have depth 1 edges"
+        assert has_depth_2, "At depth 2, should have depth 2 edges"
     
     @pytest.mark.asyncio
     async def test_traverse_nonexistent_node(self, graphiti_client):
@@ -241,8 +250,10 @@ class TestTraverseKnowledgeGraph:
         
         result = await traverse_knowledge_graph(graphiti_client, start_uuid, depth=1)
         
-        assert 'node' in result
-        assert result['node'].get('error') == 'Node not found' or result['node']['uuid'] == start_uuid
+        assert 'start' in result  # Flat structure
+        assert 'nodes' in result
+        assert start_uuid in result['nodes']
+        assert result['nodes'][start_uuid].get('error') == 'Node not found' or result['nodes'][start_uuid]['uuid'] == start_uuid
         assert result['edges'] == []
     
     @pytest.mark.asyncio
@@ -255,24 +266,32 @@ class TestTraverseKnowledgeGraph:
         
         assert not isinstance(result, dict) or 'error' not in result
         
-        # Check for cyclic_reference markers in deep traversal
-        def check_for_cycles(node_data, visited=None):
-            if visited is None:
-                visited = set()
+        # In flat structure, check for cycles by examining edges
+        def check_for_cycles(result):
+            # Cycles are detected when an edge points to an already visited node
+            visited = set()
+            visited.add(result['start'])
             
-            if 'cyclic_reference' in node_data and node_data['cyclic_reference']:
-                return True
-            
-            for edge in node_data.get('edges', []):
-                if check_for_cycles(edge['target'], visited):
-                    return True
+            for edge in result.get('edges', []):
+                source = edge.get('source')
+                target = edge.get('target')
+                
+                # If we see an edge pointing back to a visited node, it's a cycle
+                # The BFS engine should handle this by not re-traversing
+                if source and target:
+                    if target in visited:
+                        # This could indicate a cycle was detected
+                        return True
+                    visited.add(target)
             
             return False
         
         # There might be cycles in depth 3 traversal
-        # This is OK as long as they're marked
-        if check_for_cycles(result):
-            assert True  # Cycles are properly marked
+        # The flat structure handles cycles by not re-traversing visited nodes
+        # So we just verify the result is valid
+        assert 'start' in result
+        assert 'nodes' in result
+        assert 'edges' in result
     
     @pytest.mark.asyncio
     async def test_traverse_max_depth_limit(self, graphiti_client):
@@ -320,56 +339,6 @@ class TestTraverseKnowledgeGraphImpl:
         yield client
         await client.driver.close()
     
-    @pytest.mark.asyncio
-    async def test_impl_with_visited_nodes(self, graphiti_client):
-        """Test the implementation with pre-populated visited nodes."""
-        start_uuid = "3e6968a4-2288-4681-8f45-e6f97ac94869"  # Bob Johnson
-        visited = {start_uuid}  # Mark as already visited
-        
-        result = await traverse_knowledge_graph_impl(
-            graphiti_client, 
-            start_uuid, 
-            depth=1, 
-            visited_nodes=visited
-        )
-        
-        # Should return cyclic reference marker
-        assert 'cyclic_reference' in result
-        assert result['cyclic_reference'] is True
-        assert result['edges'] == []
-    
-    @pytest.mark.asyncio
-    async def test_impl_visited_nodes_accumulation(self, graphiti_client):
-        """Test that visited_nodes set accumulates properly."""
-        start_uuid = "e805a3a7-fd76-4d34-80f4-c7eb3165b635"  # Project Alpha
-        visited = set()
-        
-        result = await traverse_knowledge_graph_impl(
-            graphiti_client,
-            start_uuid,
-            depth=2,
-            visited_nodes=visited
-        )
-        
-        # After traversal, visited should contain at least the start node
-        assert start_uuid in visited
-        
-        # Count unique nodes in result
-        def count_unique_nodes(node_data, nodes=None):
-            if nodes is None:
-                nodes = set()
-            
-            if 'node' in node_data and 'uuid' in node_data['node']:
-                nodes.add(node_data['node']['uuid'])
-            
-            for edge in node_data.get('edges', []):
-                count_unique_nodes(edge['target'], nodes)
-            
-            return nodes
-        
-        unique_nodes = count_unique_nodes(result)
-        # Should have multiple unique nodes at depth 2
-        assert len(unique_nodes) > 1
 
 
 if __name__ == "__main__":

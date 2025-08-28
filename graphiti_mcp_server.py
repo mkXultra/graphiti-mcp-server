@@ -1085,13 +1085,14 @@ async def get_entity_relations(
 
 @mcp.tool()
 async def traverse_knowledge_graph(
-    start_node_uuid: str,
+    start_node_uuid: str | None = None,
     depth: int = 1,
+    cursor_token: str | None = None,
 ) -> dict[str, Any] | ErrorResponse:
-    """Traverse the knowledge graph starting from a specific node.
+    """Traverse the knowledge graph starting from a specific node with optional pagination.
     
-    NOTE: This is an older tool that only supports single node traversal.
-    Consider using build_subgraph for more features.
+    NOTE: This tool now supports cursor-based pagination for large graphs.
+    Consider using build_subgraph for different use cases.
     
     USE build_subgraph INSTEAD WHEN:
     - You need multiple starting points
@@ -1101,13 +1102,21 @@ async def traverse_knowledge_graph(
     USE THIS WHEN:
     - You only need single-node traversal
     - You want a simpler nested structure
+    - You need to paginate through large results
     
     Args:
-        start_node_uuid: UUID of the node to start traversal from
+        start_node_uuid: UUID of the node to start traversal from (required for initial call)
         depth: Depth of traversal (0 = node only, 1 = direct relations, 2+ = deeper traversal, max 5)
+        cursor_token: Optional cursor token for resuming a paginated traversal
+    
+    Returns:
+        Dictionary with traversal results. May include a 'cursor' field with:
+        - token: Opaque cursor token for next page
+        - has_more: Boolean indicating if more pages exist
+        - expires_at: ISO timestamp when cursor expires
     """
     global graphiti_client
-    return await traverse_knowledge_graph_impl(graphiti_client, start_node_uuid, depth)
+    return await traverse_knowledge_graph_impl(graphiti_client, start_node_uuid, depth, cursor_token)
 
 
 @mcp.tool()

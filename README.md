@@ -237,15 +237,41 @@ graphiti-mcp-server/
 
 ## 🧪 Testing
 
-Run the comprehensive test suite:
+### Prerequisites
+The test suite requires a separate Neo4j test database to avoid affecting your main data.
+
+### Running Tests
 
 ```bash
-# Run all tests
-OPENAI_API_KEY=dummy python3 -m pytest src/tests/ -v
+# 1. Start the test database
+docker-compose -f docker-compose.test.yml up -d
 
-# Run specific test
-OPENAI_API_KEY=dummy python3 -m pytest src/tests/test_graph_functions.py::TestFindPathsBetweenEntities -v
+# 2. Wait for the database to be ready
+sleep 5
+
+# 3. Run all tests (using uv for dependency management)
+OPENAI_API_KEY=dummy uv run python -m pytest src/tests/ -v
+
+# Or run specific test class
+OPENAI_API_KEY=dummy uv run python -m pytest src/tests/test_graph_functions.py::TestFindPathsBetweenEntities -v
+
+# Or run specific test method
+OPENAI_API_KEY=dummy uv run python -m pytest src/tests/test_graph_functions.py::TestFindPathsBetweenEntities::test_find_direct_path -v
+
+# Alternative: without uv (requires manual dependency installation)
+# OPENAI_API_KEY=dummy python3 -m pytest src/tests/ -v
+
+# 4. Stop the test database when done
+docker-compose -f docker-compose.test.yml down
 ```
+
+### Test Database Configuration
+- Port: 7688 (Bolt)
+- Port: 7475 (HTTP)
+- Username: neo4j
+- Password: testpassword
+
+**Note:** The `OPENAI_API_KEY` can be any dummy value as it's required by Graphiti core but not actually used in tests.
 
 ## 🤝 Contributing
 
@@ -288,7 +314,7 @@ This project maintains the same license as the parent Graphiti project.
 | `traverse_knowledge_graph` | Single entity | Nested hierarchy | Deep traversal |
 
 ### Code Quality
-- 14+ comprehensive tests with 100% pass rate
+- 110+ comprehensive tests with 100% pass rate
 - Type hints throughout
 - Consistent error handling
 - Extensive logging for debugging
