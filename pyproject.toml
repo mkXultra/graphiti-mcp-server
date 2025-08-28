@@ -9,5 +9,14 @@ dependencies = [
     "openai>=1.68.2",
     "graphiti-core>=0.18.5",
     "azure-identity>=1.21.0",
-    "watchdog>=3.0.0",  # ホットリロード用
+    "watchdog>=3.0.0", # ホットリロード用
+    "freezegun>=1.5.0", # テスト用の時刻固定
+    "tiktoken>=0.11.0",
+]
+
+[dependency-groups]
+dev = [
+    "freezegun>=1.5.5",
+    "pytest>=8.4.1",
+    "pytest-asyncio>=1.1.0",
 ]
